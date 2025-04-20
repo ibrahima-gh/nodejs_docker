@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Devops</title>
+</head>
+<body>
+<div class="min-h-screen bg-gray-100 flex items-center justify-center">
+    <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4 w-full max-w-md">
+        <h1 class="text-2xl font-bold mb-4 text-center">To-Do List</h1>
+        
+        <form id="todo-form" class="mb-4">
+            <div class="flex items-center">
+                <input id="todo-input" type="text" placeholder="Entrez une nouvelle tâche"
+                       class="border rounded w-full py-2 px-3 focus:outline-none focus:shadow-outline">
+                <button type="submit" class="ml-2 bg-blue-500 hover:opacity-70 text-white font-bold py-2 px-4 rounded cursor-pointer">+</button>
+            </div>
+        </form>
+        
+        <ul id="todo-list" class="pl-5 divide-y-2 divide-gray-200">
+        </ul>
+
+        <h2 class="text-xl font-semibold mt-8 mb-4 text-center">Se connecter</h2>
+        <form id="user-form" class="mb-4">
+            <div class="mb-4">
+                <input id="name" name="name" type="text" placeholder="Nom d'utilisateur" required
+                       class="border rounded w-full py-2 px-3 mb-2 focus:outline-none focus:shadow-outline" />
+            </div>
+            <button type="submit" class="bg-green-500 hover:opacity-70 text-white font-bold py-2 px-4 rounded cursor-pointer">Se connecter</button>
+        </form>
+        <ul id="user-list" class="pl-5 divide-y-2 divide-gray-200"></ul>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+
+    const userForm = document.getElementById('user-form');
+    const todoForm = document.getElementById('todo-form');
+    const todoInput = document.getElementById('todo-input');
+    const todoList = document.getElementById('todo-list');
+    const todoSection = todoForm.parentElement;
+    const userFormSection = userForm.parentElement;
+    
+    userForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('name').value.trim();
+        if (name) {
+            currentUser = name;
+            try {
+                const allUsersRes = await fetch('/users');
+                const allUsers = await allUsersRes.json();
+                const exists = allUsers.find(u => u.name === currentUser);
+                if (!exists) {
+                    await fetch('/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: currentUser })
+                    });
+                }
+                todoList.innerHTML = '';
+                const messageElement = document.createElement('p');
+                messageElement.className = "text-center text-gray-500 mt-4";
+
+                const res = await fetch(`/tasks/${currentUser}`);
+                const data = await res.json();
+
+                if (data.tasks && data.tasks.length > 0) {
+                    data.tasks.forEach(t => appendTaskToDOM(t.task));
+                } else if (data.message) {
+                    messageElement.textContent = data.message;
+                    todoList.appendChild(messageElement);
+                }
+
+                alert(`Connecté en tant que ${currentUser}`);
+            } catch (err) {
+                alert("Erreur serveur lors de la connexion");
+            }
+            userForm.reset();
+        }
+    });
+
+    function appendTaskToDOM(taskText) {
+        const li = document.createElement('li');
+        li.textContent = taskText;
+        li.className = "flex justify-between items-center py-2";
+
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Supprimer';
+        deleteButton.className = "ml-4 bg-red-500 hover:opacity-70 cursor-pointer text-white font-bold py-2 px-4 rounded";
+        deleteButton.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/tasks', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user: currentUser, task: taskText })
+                });
+
+                if (res.ok) {
+                    li.remove();
+                } else {
+                    alert("Erreur lors de la suppression de la tâche");
+                }
+            } catch (err) {
+                alert("Erreur serveur lors de la suppression");
+            }
+        });
+
+        li.appendChild(deleteButton);
+        todoList.appendChild(li);
+    }
+
+    todoForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const task = todoInput.value.trim();
+        if (task && currentUser) {
+            try {
+                const res = await fetch('/tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user: currentUser, task })
+                });
+                if (res.ok) {
+                    appendTaskToDOM(task);
+                    todoInput.value = '';
+                } else {
+                    alert("Erreur lors de l'ajout de la tâche");
+                }
+            } catch (err) {
+                alert("Erreur serveur");
+            }
+        }
+    });
+</script>
+</html>
